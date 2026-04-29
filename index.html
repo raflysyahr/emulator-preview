@@ -420,61 +420,31 @@
   .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: var(--glow); animation: pulse 2s infinite; }
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
 
-  /* ── AI MEDALLION BADGE ── */
+  /* ── AI LABEL ── */
   .ai-badge {
-    position: fixed;
-    top: 10px;
-    right: 14px;
-    width: 90px;
-    height: 110px;
-    z-index: 10000;
-    pointer-events: none;
-    filter: drop-shadow(0 0 10px rgba(0,255,65,0.7)) drop-shadow(0 0 24px rgba(0,255,65,0.35));
-    animation: badge-float 3s ease-in-out infinite;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border: 1px solid rgba(0,255,65,0.35);
+    background: rgba(0,255,65,0.07);
+    color: rgba(0,255,65,0.5);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 1px;
+    border-radius: 2px;
+    white-space: nowrap;
   }
 
-  @keyframes badge-float {
-    0%,100% { transform: translateY(0px); filter: drop-shadow(0 0 10px rgba(0,255,65,0.7)) drop-shadow(0 0 24px rgba(0,255,65,0.35)); }
-    50%     { transform: translateY(-4px); filter: drop-shadow(0 0 18px rgba(0,255,65,1))   drop-shadow(0 0 36px rgba(0,255,65,0.5)); }
-  }
-
-</style>
+  </style>
 </head>
 <body>
 
-<!-- AI Medallion Badge -->
-<div class="ai-badge">
-  <svg viewBox="0 0 90 110" xmlns="http://www.w3.org/2000/svg" width="90" height="110">
-    <defs>
-      <radialGradient id="bgGrad" cx="50%" cy="40%" r="55%">
-        <stop offset="0%"   stop-color="#00ff41"/>
-        <stop offset="100%" stop-color="#005c18"/>
-      </radialGradient>
-      <radialGradient id="innerGrad" cx="50%" cy="40%" r="55%">
-        <stop offset="0%"   stop-color="#00c431"/>
-        <stop offset="100%" stop-color="#003b0e"/>
-      </radialGradient>
-    </defs>
-    <!-- Ribbons -->
-    <polygon points="28,78 38,95 33,110 22,110 22,82" fill="#003b0e" opacity="0.95"/>
-    <polygon points="62,78 52,95 57,110 68,110 68,82" fill="#003b0e" opacity="0.95"/>
-    <line x1="30" y1="83" x2="25" y2="108" stroke="#00ff41" stroke-width="0.8" stroke-dasharray="3,3" opacity="0.5"/>
-    <line x1="60" y1="83" x2="65" y2="108" stroke="#00ff41" stroke-width="0.8" stroke-dasharray="3,3" opacity="0.5"/>
-    <!-- Scallop outer shape -->
-    <polygon points="45,2 50,5 55,3 59,7 64,6 67,11 72,11 74,16 79,18 80,23 85,26 84,31 88,35 86,40 89,45 86,50 88,55 84,60 85,65 80,67 79,72 74,74 72,78 67,79 64,83 59,83 55,87 50,85 45,88 40,85 35,87 31,83 26,83 23,79 18,78 16,74 11,72 10,67 5,65 6,60 2,55 4,50 1,45 4,40 2,35 6,31 5,26 10,23 11,18 16,16 18,11 23,11 26,6 31,7 35,3 40,5" fill="url(#bgGrad)"/>
-    <!-- Inner circle -->
-    <circle cx="45" cy="44" r="33" fill="url(#innerGrad)" opacity="0.6"/>
-    <!-- Dashed ring -->
-    <circle cx="45" cy="44" r="31" fill="none" stroke="#00ff41" stroke-width="0.9" stroke-dasharray="4,3" opacity="0.7"/>
-    <!-- Labels -->
-    <text x="45" y="35" text-anchor="middle" font-family="Orbitron,monospace" font-weight="700" font-size="7.5" fill="#020c02" letter-spacing="1">BUATAN</text>
-    <text x="45" y="54" text-anchor="middle" font-family="Orbitron,monospace" font-weight="900" font-size="22" fill="#020c02" letter-spacing="2">AI</text>
-    <text x="45" y="64" text-anchor="middle" font-family="Orbitron,monospace" font-weight="400" font-size="5.5" fill="#020c02" letter-spacing="2" opacity="0.8">CLAUDE</text>
-  </svg>
-</div>
+<span class="ai-badge">✦ Buatan AI</span>
 
 <header>
   <div class="logo">RESP<span>VIEW</span> <span class="blink">_</span></div>
+  <span class="ai-badge">✶ Buatan AI</span>
   <div class="tabs">
     <button class="tab active" onclick="switchTab('url')">URL</button>
     <button class="tab" onclick="switchTab('html')">HTML CODE</button>
