@@ -184,18 +184,22 @@
 
   /* ── URL PANEL ── */
   #urlPanel {
+    width:100%;
     padding: 16px 20px;
     gap: 12px;
   }
 
   .url-bar {
     display: flex;
+    width:100%;
     gap: 8px;
     align-items: center;
+    height: 32px;
   }
 
   .url-bar input {
     flex: 1;
+    width:70%;
     padding: 8px 14px;
     background: var(--bg);
     border: 1px solid var(--border);
@@ -209,17 +213,20 @@
   .url-bar input:focus { border-color: var(--green); box-shadow: var(--glow); }
 
   .go-btn {
+    width:30%;
     padding: 8px 20px;
     background: var(--green);
     color: var(--bg);
     border: none;
     font-family: 'Orbitron', monospace;
     font-weight: 700;
-    font-size: 0.8rem;
+    font-size: 0.5rem;
+    height:100%;
     letter-spacing: 2px;
     cursor: pointer;
     transition: all 0.15s;
     white-space: nowrap;
+    text-align:center;
   }
 
   .go-btn:hover { background: #00ff41cc; box-shadow: var(--glow-strong); }
@@ -420,6 +427,49 @@
   .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: var(--glow); animation: pulse 2s infinite; }
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
 
+  /* ── SCREENSHOT BUTTON ── */
+  .shot-btn {
+    padding: 5px 14px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--green-dim);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.72rem;
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: 1px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .shot-btn:hover {
+    color: var(--green);
+    border-color: var(--green);
+    background: var(--green-dark);
+    box-shadow: var(--glow);
+  }
+  .shot-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  /* ── TOAST ── */
+  #shotToast {
+    position: fixed;
+    bottom: 40px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--green);
+    color: var(--bg);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.75rem;
+    letter-spacing: 2px;
+    padding: 8px 20px;
+    opacity: 0;
+    transition: opacity 0.2s, transform 0.2s;
+    pointer-events: none;
+    z-index: 99999;
+    white-space: nowrap;
+  }
+  #shotToast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
   /* ── AI LABEL ── */
   .ai-badge {
     display: inline-flex;
@@ -499,7 +549,9 @@
     <button onclick="zoomIn()">+</button>
     <button onclick="zoomFit()" title="Fit to screen" style="width:auto;padding:0 8px;font-size:0.7rem">FIT</button>
   </div>
-  <div id="sizeDisplay" style="margin-left:auto">📐 1280 × 800 px</div>
+  <div class="sep"></div>
+  <button class="shot-btn" id="shotBtn" onclick="takeScreenshot()" title="Screenshot iframe">📷 SHOT</button>
+    <div id="sizeDisplay" style="margin-left:auto">📐 1280 × 800 px</div>
 </div>
 
 <!-- STAGE -->
@@ -667,6 +719,144 @@
 
   // ── Init ──
   applyViewport();
+
+  // ── Screenshot ──
+  async function takeScreenshot() {
+    const btn = document.getElementById('shotBtn');
+
+    if (frame.style.display === 'none') {
+      showToast('⚠ LOAD DULU KONTENNYA');
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = '⏳ CAPTURING...';
+    showToast('📷 MENGAMBIL SCREENSHOT...');
+
+    try {
+      // Inject html2canvas ke dalam iframe lalu jalankan di sana
+      // Ini works untuk same-origin (HTML mode & URL lokal)
+      const iframeWin = frame.contentWindow;
+      const iframeDoc = frame.contentDocument || iframeWin.document;
+
+      // Inject script html2canvas ke iframe jika belum ada
+      if (!iframeWin.html2canvas) {
+        await new Promise((resolve, reject) => {
+          const s = iframeDoc.createElement('script');
+          s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+          s.onload = resolve;
+          s.onerror = reject;
+          iframeDoc.head.appendChild(s);
+        });
+      }
+
+      // Jalankan html2canvas di dalam iframe window context
+      const canvas = await iframeWin.html2canvas(iframeDoc.documentElement, {
+        width: vW,
+        height: vH,
+        windowWidth: vW,
+        windowHeight: vH,
+        scrollX: 0,
+        scrollY: 0,
+        x: 0,
+        y: 0,
+        useCORS: true,
+        allowTaint: true,
+        scale: 1,
+        logging: false,
+        backgroundColor: null
+      });
+
+      downloadCanvas(canvas);
+
+    } catch(err) {
+      console.warn('html2canvas dalam iframe gagal:', err.message);
+      // Fallback: capture pakai blob URL dari srcdoc (hanya untuk HTML mode)
+      try {
+        await screenshotFallback();
+      } catch(e2) {
+        showToast('❌ GAGAL: pastikan konten same-origin');
+        console.error(e2);
+      }
+    }
+
+    btn.disabled = false;
+    btn.innerHTML = '📷 SHOT';
+  }
+
+  // Fallback khusus HTML mode: buat iframe tersembunyi ukuran penuh, capture
+  async function screenshotFallback() {
+    const html = document.getElementById('htmlCode').value.trim();
+    if (!html) throw new Error('no html');
+
+    // Buat iframe hidden di luar viewport dengan ukuran penuh
+    const hiddenFrame = document.createElement('iframe');
+    hiddenFrame.style.cssText = `
+      position: fixed; top: 0; left: 0;
+      width: ${vW}px; height: ${vH}px;
+      border: none; opacity: 0; pointer-events: none; z-index: -1;
+    `;
+    document.body.appendChild(hiddenFrame);
+
+    await new Promise(resolve => {
+      hiddenFrame.onload = resolve;
+      const doc = hiddenFrame.contentDocument;
+      doc.open(); doc.write(html); doc.close();
+    });
+
+    // Tunggu render
+    await new Promise(r => setTimeout(r, 300));
+
+    const hWin = hiddenFrame.contentWindow;
+    const hDoc = hiddenFrame.contentDocument;
+
+    // Inject html2canvas
+    await new Promise((resolve, reject) => {
+      const s = hDoc.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+      s.onload = resolve;
+      s.onerror = reject;
+      hDoc.head.appendChild(s);
+    });
+
+    const canvas = await hWin.html2canvas(hDoc.documentElement, {
+      width: vW,
+      height: vH,
+      windowWidth: vW,
+      windowHeight: vH,
+      scrollX: 0,
+      scrollY: 0,
+      useCORS: true,
+      allowTaint: true,
+      scale: 1,
+      logging: false,
+      backgroundColor: null
+    });
+
+    document.body.removeChild(hiddenFrame);
+    downloadCanvas(canvas);
+  }
+
+  function downloadCanvas(canvas) {
+    const ts = new Date().toISOString().slice(0,19).replace(/[T:]/g,'-');
+    const filename = `respview-${vW}x${vH}-${ts}.png`;
+    const link = document.createElement('a');
+    link.download = filename;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+    showToast('\u2714 TERSIMPAN: ' + filename);
+  }
+
+  function showToast(msg) {
+    const t = document.getElementById('shotToast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(window._toastTimer);
+    window._toastTimer = setTimeout(() => t.classList.remove('show'), 3000);
+  }
+
 </script>
+<div id="shotToast"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </body>
 </html>
