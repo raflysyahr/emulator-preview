@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RespView // Viewport Debugger</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap');
+
+  :root {
+    --green: #00ff41;
+    --green-dim: #00b32c;
+    --green-dark: #003b0e;
+    --bg: #020c02;
+    --bg2: #041404;
+    --grid: rgba(0,255,65,0.04);
+    --border: rgba(0,255,65,0.25);
+    --glow: 0 0 10px rgba(0,255,65,0.4);
+    --glow-strong: 0 0 20px rgba(0,255,65,0.7), 0 0 40px rgba(0,255,65,0.3);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--green);
+    font-family: 'Share Tech Mono', monospace;
+    min-height: 100vh;
+    overflow-x: hidden;
+    background-image:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  /* Scanline overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.08) 2px,
+      rgba(0,0,0,0.08) 4px
+    );
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  /* ── HEADER ── */
+  header {
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: rgba(0,20,0,0.8);
+    backdrop-filter: blur(4px);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    flex-wrap: wrap;
+  }
+
+  .logo {
+    font-family: 'Orbitron', monospace;
+    font-weight: 900;
+    font-size: 1.1rem;
+    letter-spacing: 4px;
+    text-shadow: var(--glow-strong);
+    white-space: nowrap;
+  }
+
+  .logo span { color: rgba(0,255,65,0.4); font-weight: 400; }
+
+  .blink { animation: blink 1s step-end infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* ── TABS ── */
+  .tabs {
+    display: flex;
+    gap: 4px;
+    margin-left: auto;
+  }
+
+  .tab {
+    padding: 6px 14px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--green-dim);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.75rem;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-transform: uppercase;
+  }
+
+  .tab:hover { color: var(--green); border-color: var(--green); background: var(--green-dark); }
+  .tab.active { color: var(--bg); background: var(--green); border-color: var(--green); text-shadow: none; }
+
+  /* ── TOOLBAR ── */
+  #toolbar {
+    padding: 10px 20px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg2);
+  }
+
+  .preset-btn {
+    padding: 5px 12px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--green-dim);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.72rem;
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: 1px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .preset-btn:hover, .preset-btn.active {
+    color: var(--green);
+    border-color: var(--green);
+    background: var(--green-dark);
+    box-shadow: var(--glow);
+  }
+
+  .sep { width: 1px; height: 24px; background: var(--border); }
+
+  .dim-input {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.78rem;
+    color: var(--green-dim);
+  }
+
+  .dim-input input {
+    width: 58px;
+    padding: 4px 8px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--green);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.78rem;
+    text-align: center;
+    outline: none;
+  }
+
+  .dim-input input:focus { border-color: var(--green); box-shadow: var(--glow); }
+
+  #sizeDisplay {
+    font-size: 0.72rem;
+    color: var(--green-dim);
+    letter-spacing: 1px;
+    min-width: 120px;
+  }
+
+  .rotate-btn {
+    padding: 5px 10px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--green-dim);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.15s;
+    line-height: 1;
+  }
+  .rotate-btn:hover { color: var(--green); border-color: var(--green); background: var(--green-dark); }
+
+  /* ── MAIN CONTENT ── */
+  .panel { display: none; }
+  .panel.active { display: flex; flex-direction: column; }
+
+  /* ── URL PANEL ── */
+  #urlPanel {
+    padding: 16px 20px;
+    gap: 12px;
+  }
+
+  .url-bar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .url-bar input {
+    flex: 1;
+    padding: 8px 14px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--green);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.85rem;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .url-bar input:focus { border-color: var(--green); box-shadow: var(--glow); }
+
+  .go-btn {
+    padding: 8px 20px;
+    background: var(--green);
+    color: var(--bg);
+    border: none;
+    font-family: 'Orbitron', monospace;
+    font-weight: 700;
+    font-size: 0.8rem;
+    letter-spacing: 2px;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+
+  .go-btn:hover { background: #00ff41cc; box-shadow: var(--glow-strong); }
+
+  .info-box {
+    padding: 10px 14px;
+    border: 1px solid rgba(0,255,65,0.2);
+    background: rgba(0,255,65,0.03);
+    font-size: 0.72rem;
+    color: var(--green-dim);
+    line-height: 1.7;
+  }
+
+  .info-box a { color: var(--green); text-decoration: none; }
+  .info-box a:hover { text-shadow: var(--glow); }
+
+  /* ── HTML PANEL ── */
+  #htmlPanel {
+    padding: 16px 20px;
+    gap: 12px;
+  }
+
+  #htmlPanel textarea {
+    width: 100%;
+    height: 140px;
+    padding: 10px 14px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--green);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.75rem;
+    resize: vertical;
+    outline: none;
+    line-height: 1.5;
+  }
+
+  #htmlPanel textarea:focus { border-color: var(--green); box-shadow: var(--glow); }
+
+  .render-btn {
+    align-self: flex-start;
+    padding: 8px 20px;
+    background: var(--green);
+    color: var(--bg);
+    border: none;
+    font-family: 'Orbitron', monospace;
+    font-weight: 700;
+    font-size: 0.8rem;
+    letter-spacing: 2px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .render-btn:hover { background: #00ff41cc; box-shadow: var(--glow-strong); }
+
+  /* ── VIEWPORT STAGE ── */
+  #stage {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px;
+    gap: 12px;
+    min-height: 0;
+    background: repeating-linear-gradient(
+      45deg,
+      transparent,
+      transparent 10px,
+      rgba(0,255,65,0.015) 10px,
+      rgba(0,255,65,0.015) 20px
+    );
+  }
+
+  #viewportLabel {
+    font-size: 0.7rem;
+    color: var(--green-dim);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  #viewportWrapper {
+    position: relative;
+    border: 1px solid var(--green);
+    box-shadow: var(--glow-strong), inset 0 0 30px rgba(0,255,65,0.02);
+    transition: width 0.3s ease, height 0.3s ease;
+    overflow: hidden;
+    background: white;
+    max-width: 100%;
+  }
+
+  /* Corner decorations */
+  #viewportWrapper::before, #viewportWrapper::after {
+    content: '';
+    position: absolute;
+    width: 12px; height: 12px;
+    border-color: var(--green);
+    border-style: solid;
+    z-index: 10;
+    pointer-events: none;
+  }
+  #viewportWrapper::before { top: -1px; left: -1px; border-width: 2px 0 0 2px; }
+  #viewportWrapper::after  { bottom: -1px; right: -1px; border-width: 0 2px 2px 0; }
+
+  #previewFrame {
+    width: 100%;
+    height: 100%;
+    border: none;
+    display: block;
+  }
+
+  #placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    background: var(--bg);
+    color: var(--green-dim);
+    font-size: 0.8rem;
+    letter-spacing: 2px;
+  }
+
+  .placeholder-icon { font-size: 2.5rem; opacity: 0.3; }
+
+  #resizeHandle {
+    position: absolute;
+    bottom: 0; right: 0;
+    width: 20px; height: 20px;
+    cursor: se-resize;
+    z-index: 20;
+  }
+  #resizeHandle::before {
+    content: '◢';
+    position: absolute;
+    bottom: 2px; right: 2px;
+    color: var(--green-dim);
+    font-size: 14px;
+    line-height: 1;
+  }
+  #resizeHandle:hover::before { color: var(--green); }
+
+  /* ── ZOOM ── */
+  .zoom-wrap {
+    overflow: auto;
+    max-width: 100%;
+    max-height: calc(100vh - 280px);
+  }
+
+  /* ── RULER-STYLE LABEL ── */
+  .ruler {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.68rem;
+    color: rgba(0,255,65,0.35);
+    letter-spacing: 1px;
+  }
+
+  .ruler-line { flex: 1; height: 1px; background: var(--border); }
+
+  /* ── ZOOM CONTROLS ── */
+  .zoom-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.72rem;
+    color: var(--green-dim);
+  }
+
+  .zoom-controls button {
+    width: 26px; height: 26px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--green-dim);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.15s;
+    line-height: 1;
+  }
+  .zoom-controls button:hover { color: var(--green); border-color: var(--green); background: var(--green-dark); }
+  #zoomVal { min-width: 40px; text-align: center; }
+
+  /* ── STATUS BAR ── */
+  footer {
+    padding: 6px 20px;
+    border-top: 1px solid var(--border);
+    background: var(--bg2);
+    display: flex;
+    gap: 20px;
+    font-size: 0.68rem;
+    color: rgba(0,255,65,0.4);
+    letter-spacing: 1px;
+  }
+
+  footer span { display: flex; align-items: center; gap: 6px; }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: var(--glow); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">RESP<span>VIEW</span> <span class="blink">_</span></div>
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('url')">URL</button>
+    <button class="tab" onclick="switchTab('html')">HTML CODE</button>
+  </div>
+</header>
+
+<!-- URL PANEL -->
+<div id="urlPanel" class="panel active">
+  <div class="url-bar">
+    <input type="text" id="urlInput" placeholder="http://192.168.x.x:5173  atau  https://your-ngrok-url.ngrok.io" />
+    <button class="go-btn" onclick="loadUrl()">▶ LOAD</button>
+  </div>
+  <div class="info-box">
+    💡 <strong>Cara pakai URL lokal dari Android:</strong><br>
+    &nbsp;&nbsp;① Termux: <code>npx ngrok http 5173</code> → copy URL ngrok-nya<br>
+    &nbsp;&nbsp;② Atau jika HP & laptop satu WiFi: pakai IP lokal misal <code>http://192.168.1.x:5173</code><br>
+    &nbsp;&nbsp;③ Paste URL di atas → klik LOAD → preview tampil dengan dimensi desktop<br>
+    <br>
+    ⚠️ <code>localhost</code> / <code>127.0.0.1</code> tidak bisa di-load dari iframe — harus pakai IP atau ngrok.
+  </div>
+</div>
+
+<!-- HTML PANEL -->
+<div id="htmlPanel" class="panel">
+  <textarea id="htmlCode" placeholder="Paste HTML lengkap kamu di sini...
+<!DOCTYPE html>
+<html>
+...
+</html>"></textarea>
+  <button class="render-btn" onclick="renderHtml()">▶ RENDER HTML</button>
+</div>
+
+<!-- TOOLBAR -->
+<div id="toolbar">
+  <button class="preset-btn active" onclick="setPreset(1280,800,'desktop')" id="p-desktop">🖥 1280×800</button>
+  <button class="preset-btn" onclick="setPreset(1440,900,'desktop-lg')" id="p-desktop-lg">🖥 1440×900</button>
+  <button class="preset-btn" onclick="setPreset(1920,1080,'fhd')" id="p-fhd">🖥 1920×1080</button>
+  <div class="sep"></div>
+  <button class="preset-btn" onclick="setPreset(768,1024,'tablet-v')" id="p-tablet-v">📱 768×1024</button>
+  <button class="preset-btn" onclick="setPreset(1024,768,'tablet-h')" id="p-tablet-h">📱 1024×768</button>
+  <div class="sep"></div>
+  <button class="preset-btn" onclick="setPreset(375,812,'mobile')" id="p-mobile">📲 375×812</button>
+  <div class="sep"></div>
+  <div class="dim-input">
+    W: <input type="number" id="wInput" value="1280" min="200" max="3840" onchange="applyCustomSize()">
+    H: <input type="number" id="hInput" value="800" min="200" max="2160" onchange="applyCustomSize()">
+  </div>
+  <button class="rotate-btn" onclick="rotateViewport()" title="Rotate">⟳</button>
+  <div class="sep"></div>
+  <div class="zoom-controls">
+    <button onclick="zoomOut()">−</button>
+    <span id="zoomVal">50%</span>
+    <button onclick="zoomIn()">+</button>
+    <button onclick="zoomFit()" title="Fit to screen" style="width:auto;padding:0 8px;font-size:0.7rem">FIT</button>
+  </div>
+  <div id="sizeDisplay" style="margin-left:auto">📐 1280 × 800 px</div>
+</div>
+
+<!-- STAGE -->
+<div id="stage">
+  <div class="zoom-wrap" id="zoomWrap">
+    <div id="viewportWrapper" style="width:640px;height:400px">
+      <div id="placeholder">
+        <div class="placeholder-icon">🖥</div>
+        <div>LOAD URL ATAU PASTE HTML</div>
+        <div style="font-size:0.65rem;opacity:0.6">untuk mulai preview</div>
+      </div>
+      <iframe id="previewFrame" style="display:none"></iframe>
+      <div id="resizeHandle"></div>
+    </div>
+  </div>
+  <div class="ruler">
+    <div class="ruler-line"></div>
+    <span id="viewportLabel">1280 × 800 px — DESKTOP</span>
+    <div class="ruler-line"></div>
+  </div>
+</div>
+
+<footer>
+  <span><div class="dot"></div> RESPVIEW v1.0</span>
+  <span id="footerSize">W: 1280 H: 800</span>
+  <span id="footerZoom">ZOOM: 50%</span>
+  <span id="footerMode">MODE: DESKTOP</span>
+</footer>
+
+<script>
+  let vW = 1280, vH = 800, zoom = 0.5;
+  let activePreset = 'desktop';
+  let currentSrc = '';
+
+  const wrapper = document.getElementById('viewportWrapper');
+  const frame = document.getElementById('previewFrame');
+  const placeholder = document.getElementById('placeholder');
+
+  // ── Initial zoom fit on load ──
+  window.addEventListener('load', () => { setTimeout(zoomFit, 100); });
+
+  // ── Tab switching ──
+  function switchTab(tab) {
+    document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', ['url','html'][i] === tab));
+    document.getElementById('urlPanel').classList.toggle('active', tab === 'url');
+    document.getElementById('htmlPanel').classList.toggle('active', tab === 'html');
+  }
+
+  // ── Viewport sizing ──
+  function applyViewport() {
+    wrapper.style.width  = (vW * zoom) + 'px';
+    wrapper.style.height = (vH * zoom) + 'px';
+    frame.style.width    = vW + 'px';
+    frame.style.height   = vH + 'px';
+    frame.style.transform = `scale(${zoom})`;
+    frame.style.transformOrigin = '0 0';
+
+    document.getElementById('wInput').value = vW;
+    document.getElementById('hInput').value = vH;
+    document.getElementById('sizeDisplay').textContent = `📐 ${vW} × ${vH} px`;
+    document.getElementById('viewportLabel').textContent = `${vW} × ${vH} px — ${activePreset.toUpperCase()}`;
+    document.getElementById('footerSize').textContent = `W: ${vW} H: ${vH}`;
+    document.getElementById('footerZoom').textContent = `ZOOM: ${Math.round(zoom*100)}%`;
+    document.getElementById('footerMode').textContent = `MODE: ${activePreset.toUpperCase()}`;
+    document.getElementById('zoomVal').textContent = Math.round(zoom*100) + '%';
+  }
+
+  function setPreset(w, h, label) {
+    vW = w; vH = h; activePreset = label;
+    document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+    const btn = document.getElementById('p-' + label);
+    if (btn) btn.classList.add('active');
+    zoomFit();
+  }
+
+  function applyCustomSize() {
+    vW = parseInt(document.getElementById('wInput').value) || 1280;
+    vH = parseInt(document.getElementById('hInput').value) || 800;
+    activePreset = 'custom';
+    document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+    applyViewport();
+  }
+
+  function rotateViewport() {
+    [vW, vH] = [vH, vW];
+    activePreset += '-r';
+    document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+    applyViewport();
+  }
+
+  // ── Zoom ──
+  function zoomIn()  { zoom = Math.min(zoom + 0.1, 2); applyViewport(); }
+  function zoomOut() { zoom = Math.max(zoom - 0.1, 0.1); applyViewport(); }
+
+  function zoomFit() {
+    const stageW = document.getElementById('stage').clientWidth - 40;
+    const stageH = window.innerHeight - 320;
+    const zW = stageW / vW;
+    const zH = stageH / vH;
+    zoom = Math.min(zW, zH, 1);
+    zoom = Math.max(zoom, 0.1);
+    applyViewport();
+  }
+
+  // ── Load URL ──
+  function loadUrl() {
+    let url = document.getElementById('urlInput').value.trim();
+    if (!url) return;
+    if (!url.startsWith('http')) url = 'http://' + url;
+    placeholder.style.display = 'none';
+    frame.style.display = 'block';
+    frame.src = url;
+    currentSrc = url;
+    applyViewport();
+  }
+
+  document.getElementById('urlInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') loadUrl();
+  });
+
+  // ── Render HTML ──
+  function renderHtml() {
+    const html = document.getElementById('htmlCode').value.trim();
+    if (!html) return;
+    placeholder.style.display = 'none';
+    frame.style.display = 'block';
+    frame.src = 'about:blank';
+    setTimeout(() => {
+      try {
+        const doc = frame.contentDocument || frame.contentWindow.document;
+        doc.open(); doc.write(html); doc.close();
+      } catch(e) {
+        frame.srcdoc = html;
+      }
+      applyViewport();
+    }, 50);
+  }
+
+  // ── Resize handle (drag) ──
+  const handle = document.getElementById('resizeHandle');
+  let dragging = false, startX, startY, startW, startH;
+
+  handle.addEventListener('pointerdown', e => {
+    dragging = true;
+    startX = e.clientX; startY = e.clientY;
+    startW = vW; startH = vH;
+    e.preventDefault();
+    document.addEventListener('pointermove', onDrag);
+    document.addEventListener('pointerup', () => {
+      dragging = false;
+      document.removeEventListener('pointermove', onDrag);
+    }, {once:true});
+  });
+
+  function onDrag(e) {
+    if (!dragging) return;
+    const dx = (e.clientX - startX) / zoom;
+    const dy = (e.clientY - startY) / zoom;
+    vW = Math.max(200, Math.round(startW + dx));
+    vH = Math.max(200, Math.round(startH + dy));
+    activePreset = 'custom';
+    document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+    applyViewport();
+  }
+
+  // ── Init ──
+  applyViewport();
+</script>
+</body>
+</html>
+
